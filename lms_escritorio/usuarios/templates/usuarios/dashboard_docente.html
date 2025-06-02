@@ -1,3 +1,4 @@
+{% load tz %}
 {% load static %}
 <!DOCTYPE html>
 <html lang="es">
@@ -42,9 +43,11 @@
             border-radius: 8px;
             background-color: #F7FAFC;
         }
+
         form {
-        padding: 0 30px;
+            padding: 0 30px;
         }
+
         button {
             margin-top: 20px;
             width: 100%;
@@ -53,7 +56,7 @@
             color: white;
             border: none;
             border-radius: 12px;
-            font-weight: 600;
+            font-weight: 800;
             cursor: pointer;
         }
 
@@ -83,22 +86,59 @@
             margin: 5px 0 0;
             color: #2D3748;
         }
+
+        .archivo-chip {
+            display: inline-block;
+            margin: 5px 5px 0 0;
+            padding: 8px 14px;
+            background-color: #DCEEFB;
+            color: #2B6CB0;
+            border-radius: 20px;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 14px;
+            transition: background-color 0.3s;
+        }
+
+        .archivo-chip:hover {
+            background-color: #BEE3F8;
+        }
+        .boton-reporte {
+    display: inline-block;
+    margin: 0 10px 20px 10px;
+    padding: 12px 28px;
+    background-color: #2B6CB0;
+    color: white;
+    font-weight: 300;
+    border-radius: 12px;
+    text-decoration: none;
+    transition: background-color 0.3s ease;
+    cursor: pointer;
+}
+
+.boton-reporte:hover {
+    background-color: #1A4E8A;
+}
+
     </style>
 </head>
 <body>
     <div class="card">
         <div style="text-align: right; margin-bottom: 20px;">
-    <a href="{% url 'logout_docente' %}" style="color: #2B6CB0; font-weight: bold;">Cerrar sesión</a>
-</div>
+            <a href="{% url 'logout_docente' %}" style="color: #2B6CB0; font-weight: bold;">Cerrar sesión</a>
+        </div>
         <h1>Bienvenido {{ nombre }}</h1>
 
-        <form method="post">
+        <form method="post" enctype="multipart/form-data">
             {% csrf_token %}
             <label for="titulo">Título de la tarea</label>
             <input type="text" name="titulo" id="titulo" required>
 
             <label for="descripcion">Descripción</label>
             <textarea name="descripcion" id="descripcion" required></textarea>
+
+            <label for="archivos">Archivos (puedes subir varios)</label>
+            <input type="file" name="archivos" id="archivos" multiple>
 
             <button type="submit">Crear Tarea</button>
         </form>
@@ -107,21 +147,43 @@
             <div class="mensaje">{{ mensaje }}</div>
         {% endif %}
 
-<div class="tareas">
-    <h2>Tareas creadas</h2>
-    {% for tarea in tareas %}
-        <div class="tarea">
-            <h3>{{ tarea.titulo }}</h3>
-            <p>{{ tarea.descripcion }}</p>
-            <form action="{% url 'eliminar_tarea' tarea.id %}" method="post" style="margin-top: 10px;">
-                {% csrf_token %}
-                <button type="submit" style="background-color: #E53E3E;">Eliminar</button>
-            </form>
+        <div class="tareas">
+            <div style="margin-bottom: 20px; text-align: center;">
+                <a href="{% url 'reporte_pdf' %}" class="boton-reporte">📄 Descargar PDF semanal</a>
+                <a href="{% url 'reporte_excel' %}" class="boton-reporte">📊 Descargar Excel semanal</a>
+            </div>
+
+            <h2>Tareas creadas</h2>
+
+            {% for tarea in tareas %}
+                <div class="tarea">
+                    <small>Docente: {{ tarea.nombre_docente }}</small><br>
+                    <small>Creado el {{ tarea.created_at|localtime|date:"d/m/Y H:i" }}</small>
+                    <h3>{{ tarea.titulo }}</h3>
+                    <p>{{ tarea.descripcion }}</p>
+
+                    {% if tarea.archivos %}
+                        <div style="margin-top: 10px;">
+                            <strong style="color: #2D3748;">Archivos adjuntos:</strong>
+                            <ul style="list-style: none; padding-left: 0; margin-top: 10px;">
+                                {% for archivo in tarea.archivos %}
+                                    <li style="display: inline-block;">
+                                        <a class="archivo-chip" href="{{ archivo.url }}" target="_blank">📎 Archivo {{ forloop.counter }}</a>
+                                    </li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    {% endif %}
+
+                    <form action="{% url 'eliminar_tarea' tarea.id %}" method="post" style="margin-top: 10px;">
+                        {% csrf_token %}
+                        <button type="submit" style="background-color: #E53E3E;">Eliminar</button>
+                    </form>
+                </div>
+            {% empty %}
+                <p>No has creado ninguna tarea aún.</p>
+            {% endfor %}
         </div>
-    {% empty %}
-        <p>No has creado ninguna tarea aún.</p>
-    {% endfor %}
-</div>
     </div>
 </body>
 </html>
