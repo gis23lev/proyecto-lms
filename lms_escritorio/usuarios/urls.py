@@ -37,9 +37,13 @@ urlpatterns = [
     
     path('dashboard/eliminar_tarea/<str:tarea_id>/', views.eliminar_tarea, name='eliminar_tarea'),
     path('logout_docente/', views.logout_docente, name='logout_docente'),
+    path('docente/reporte_pdf/', views.exportar_reporte_pdf, name='reporte_pdf'),
+    path('docente/reporte_excel/', views.exportar_reporte_excel, name='reporte_excel'),
 
 
 
     path('api/tareas/', views.lista_tareas, name='lista_tareas'),
     path('api/entrega/', views.crear_entrega, name='crear_entrega'),
+
+    
     ]
