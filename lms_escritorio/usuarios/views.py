@@ -1,5 +1,7 @@
 # usuarios/views.py
 from django.http import JsonResponse
+from django.core.files.base import File
+from mongoengine import FileField
 from django.http import HttpResponse
 from django.views.decorators.csrf import csrf_exempt
 import json
@@ -10,6 +12,12 @@ from .models import Usuario_admin
 from django.contrib import messages
 from django.contrib.auth.hashers import make_password, check_password
 from bson import ObjectId  # Asegúrate de importar esto si estás usando MongoDB
+from mongoengine.fields import GridFSProxy
+from datetime import timedelta
+from django.utils import timezone
+from reportlab.lib.pagesizes import letter
+from reportlab.pdfgen import canvas
+from openpyxl import Workbook
 from .models import Estudiante
 
 from .models import Docente
@@ -373,14 +381,26 @@ def dashboard_docente(request):
     if request.method == 'POST':
         titulo = request.POST.get('titulo')
         descripcion = request.POST.get('descripcion')
+        archivos = request.FILES.getlist('archivos')
 
         if titulo and descripcion:
-            Tarea(
+            tarea = Tarea(
                 titulo=titulo,
                 descripcion=descripcion,
                 docente=docente,
-                nombre_docente=docente.nombre  # <-- esto faltaba
-            ).save()
+                nombre_docente=docente.nombre
+            )
+            tarea.save()
+
+            # Para guardar archivos en GridFS
+            for archivo in archivos:
+                proxy = GridFSProxy()
+                proxy.put(archivo, filename=archivo.name, content_type=archivo.content_type)
+                tarea.archivos.append(proxy)
+
+
+            tarea.save()  # Guardar de nuevo con archivos
+
             mensaje = "Tarea creada correctamente."
         else:
             mensaje = "Por favor, completa todos los campos."
@@ -392,6 +412,73 @@ def dashboard_docente(request):
         'tareas': tareas,
         'mensaje': mensaje
     })
+
+def tareas_de_esta_semana(docente):
+    hoy = timezone.now()
+    inicio_semana = hoy - timedelta(days=hoy.weekday())  # lunes
+    fin_semana = inicio_semana + timedelta(days=6)  # domingo
+
+    return Tarea.objects(
+        docente=docente,
+        created_at__gte=inicio_semana,
+        created_at__lte=fin_semana
+    )
+
+
+def exportar_reporte_pdf(request):
+    if 'docente_id' not in request.session:
+        return redirect('login_docente')
+
+    docente = Docente.objects(id=request.session['docente_id']).first()
+    tareas = tareas_de_esta_semana(docente)
+
+    response = HttpResponse(content_type='application/pdf')
+    response['Content-Disposition'] = 'attachment; filename="reporte_semanal.pdf"'
+
+    p = canvas.Canvas(response, pagesize=letter)
+    width, height = letter
+    y = height - 50
+
+    p.setFont("Helvetica-Bold", 16)
+    p.drawString(50, y, f"Tareas de la semana - Docente: {docente.nombre}")
+    y -= 30
+
+    p.setFont("Helvetica", 12)
+    for tarea in tareas:
+        p.drawString(50, y, f"- {tarea.titulo} | {tarea.created_at.strftime('%d/%m/%Y %H:%M')}")
+        y -= 20
+        if y < 50:
+            p.showPage()
+            y = height - 50
+
+    p.showPage()
+    p.save()
+
+    return response
+
+
+def exportar_reporte_excel(request):
+    if 'docente_id' not in request.session:
+        return redirect('login_docente')
+
+    docente = Docente.objects(id=request.session['docente_id']).first()
+    tareas = tareas_de_esta_semana(docente)
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Tareas Semanales"
+
+    ws.append(["Título", "Descripción", "Fecha de creación"])
+
+    for tarea in tareas:
+        ws.append([tarea.titulo, tarea.descripcion, tarea.created_at.strftime('%d/%m/%Y %H:%M')])
+
+    response = HttpResponse(
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    )
+    response['Content-Disposition'] = 'attachment; filename=reporte_semanal.xlsx'
+    wb.save(response)
+    return response
 def eliminar_tarea(request, tarea_id):
     if 'docente_id' not in request.session:
         return redirect('login_docente')
